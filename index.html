@@ -1,0 +1,608 @@
+<!doctype html>
+<html lang="ar">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TaskFlow</title>
+<style>html,body{margin:0;padding:0;background:#f7f5ef}</style>
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+<script>
+// بديل window.storage الخاص بـ Claude: يحفظ البيانات في متصفح المستخدم
+window.storage = window.storage || {
+  get: async (k) => { try { const v = localStorage.getItem(k); return v == null ? null : { key: k, value: v }; } catch (e) { return null; } },
+  set: async (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} return { key: k, value: v }; },
+  delete: async (k) => { try { localStorage.removeItem(k); } catch (e) {} return { key: k, deleted: true }; }
+};
+</script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useEffect } = React;
+
+const C={navy:"#162038",navy2:"#1e2d4e",gold:"#c9a227",goldL:"#f0d98a",goldD:"#a07f1a",cream:"#f7f5ef",white:"#fff",muted:"#8a9ab5",border:"rgba(22,32,56,0.1)"};
+const css=`@keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}.fi{transition:transform .55s;transform-style:preserve-3d}.fi.on{transform:rotateY(180deg)}.ff,.fb{-webkit-backface-visibility:hidden;backface-visibility:hidden;position:absolute;top:0;left:0;width:100%;height:100%}.fb{transform:rotateY(180deg)}.hov:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(22,32,56,.1)!important}.np.on{background:${C.gold};color:${C.navy}}.np{transition:all .18s;cursor:pointer;white-space:nowrap}.np:hover:not(.on){background:rgba(255,255,255,.1)}.ao:hover{border-color:${C.gold}!important}input:focus,textarea:focus,select:focus{outline:none;border-color:${C.gold}!important}::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:rgba(22,32,56,.18);border-radius:2px}`;
+
+const UI={
+  en:{
+    appName:"PMP Study Pro",appSub:"PMBOK® 7th Edition",langBtn:"العربية 🌐",streak:"day streak",accLbl:"accuracy",
+    tabs:["Dashboard","Domains","Flashcards","Practice","Mock Exam","Formulas","Agile","Notes","Quick Revision"],
+    dash:{title:"Study Dashboard",s1:"Topics Assessed",s2:"High Confidence",s3:"Questions Done",s4:"Accuracy",s5:"Cards Known",s6:"Study Streak",readiness:"Overall Exam Readiness",mastered:"topics mastered",toGo:"to go",weight:"Exam Domain Weight",ofExam:"% of exam",mission:"⚡ Daily Study Mission",missions:["Study one PMP domain","Review 10 flashcards","Answer 5 practice Qs","Review your weak areas","Revise EVM formulas"]},
+    dom:{title:"PMP Exam Domains",low:"Low",med:"Med",high:"High"},
+    fl:{title:"Flashcards",know:"✓ Know",rev:"↩ Review",weak:"⚑ Weak",card:"Card",of:"of",ans:"Answer",tap:"Tap to flip",prev:"← Prev",knowBtn:"✓ Know This",revBtn:"↩ Review Again",weakBtn:"⚑ Mark Weak",next:"Next →",nav:"Card Navigator"},
+    pr:{title:"Practice Questions",submit:"Submit Answer",correct:"✓ Correct!",incorrect:"✗ Incorrect"},
+    mk:{title:"Mock Exam",sub:"Timed Mock Exam",desc:"Simulate real PMP exam conditions · No feedback during exam",qs:"Questions",demo:"Demo includes",max:"questions max",start:"Start Exam →",back:"← Back",next:"Next →",submitE:"Submit Exam ✓",resC:"correct",resT:"Time",pass:"🎉 Passing score! Great work!",fail:"📚 Below 70%. Review weak areas and retry.",retry:"Try Again"},
+    fo:{title:"Formulas & Key Concepts",ex:"Example:",all:"All"},
+    ag:{title:"Agile & Hybrid Focus",sub:"Essential Agile concepts, Scrum framework, and exam mindset",man:"Agile Manifesto — 4 Core Values",cyc:"Scrum Sprint Cycle",
+      mv:["Individuals & interactions OVER processes & tools","Working software OVER comprehensive documentation","Customer collaboration OVER contract negotiation","Responding to change OVER following a plan"],
+      cs:["📋 Product Backlog","📅 Sprint Planning","⚙️ Sprint Execution","☀️ Daily Scrum","✅ Sprint Review","🔄 Retrospective"]},
+    no:{title:"Personal Notes",add:"Add New Note",topic:"Topic",ph:"Write your note here...",save:"Save Note",empty:"No notes yet. Start adding notes above!"},
+    rv:{title:"⚡ Quick Revision",sub:"Last-minute scan — key facts, traps, formulas, mindset",
+      secs:[["definitions","📌 Key Definitions"],["traps","⚠️ Exam Traps"],["formulas","🧮 Formulas"],["mindset","🧠 PM Mindset"]],
+      definitions:["Project: Temporary + Unique — has start and end","Charter: Formally authorizes project — created by Sponsor","WBS: Decomposes DELIVERABLES (not tasks) hierarchically","Critical Path: Longest path = shortest project duration","Float = Zero on Critical Path activities","Risk: Uncertain event with positive or negative impact","Issue: A risk that has already occurred","Change Control: ALL changes go through ICC — no exceptions","Quality: Prevention > Inspection","Servant Leader: Remove obstacles, empower, enable success"],
+      traps:["Sponsor creates the Charter — NOT the PM","WBS decomposes deliverables, NOT activities","Gold Plating = always bad — never add unapproved features","Always go through change control — even 'small' changes","CPI/SPI < 1 = bad, > 1 = good performance","Risk Register ≠ Issues Log — DIFFERENT documents","PM delivers the project — Sponsor owns business value","Agile embraces change but still plans — not chaos","Sprint scope is protected — PO cancels, not adds mid-sprint","Adding one stakeholder adds N new communication channels"],
+      formulas:["CPI = EV/AC  (>1 = under budget ✓)","SPI = EV/PV  (>1 = ahead of schedule ✓)","CV = EV−AC  (positive = under budget ✓)","SV = EV−PV  (positive = ahead of schedule ✓)","EAC = BAC/CPI  (most common forecast)","ETC = EAC−AC  (remaining cost to complete)","VAC = BAC−EAC  (positive = finish under budget)","PERT = (O+4M+P)/6  (three-point estimate)","Channels = N(N−1)/2  (communication complexity)","Float = LS−ES = LF−EF  (zero on critical path)"],
+      mindset:["Think proactively — address risks before they become issues","Always choose collaboration and win-win solutions first","Communication is the PM's #1 most important skill","Agile: embrace change, deliver value, inspect & adapt","When in doubt: follow the process, update the plan, communicate","Empower the team — avoid micromanagement at all costs","Risk management is continuous throughout the entire project","Talk to stakeholders first — almost always the right answer","Focus on delivering business value, not just completing tasks","Best PMs facilitate decisions — they don't always make them"]},
+    footer:"PMP Study Pro · PMBOK® Guide 7th Edition · Progress saved automatically",
+  },
+  ar:{
+    appName:"برو لدراسة PMP",appSub:"PMBOK® الإصدار السابع",langBtn:"English 🌐",streak:"أيام متتالية",accLbl:"دقة الإجابات",
+    tabs:["لوحة التحكم","المجالات","بطاقات التعلم","تدريب","امتحان تجريبي","المعادلات","أجايل","ملاحظات","مراجعة سريعة"],
+    dash:{title:"لوحة الدراسة",s1:"المواضيع المُقيَّمة",s2:"ثقة عالية",s3:"الأسئلة المُجابة",s4:"الدقة",s5:"البطاقات المعروفة",s6:"سلسلة الدراسة",readiness:"الاستعداد العام للامتحان",mastered:"موضوع تم إتقانه",toGo:"متبقٍ",weight:"وزن مجالات الامتحان",ofExam:"% من الامتحان",mission:"⚡ مهمة الدراسة اليومية",missions:["ادرس مجالاً واحداً من PMP","راجع 10 بطاقات تعلم","أجب على 5 أسئلة تدريبية","راجع نقاط ضعفك","راجع معادلات EVM"]},
+    dom:{title:"مجالات امتحان PMP",low:"منخفضة",med:"متوسطة",high:"عالية"},
+    fl:{title:"بطاقات التعلم",know:"✓ أعرف",rev:"↩ مراجعة",weak:"⚑ ضعيف",card:"بطاقة",of:"من",ans:"الإجابة",tap:"اضغط للقلب",prev:"السابق ←",knowBtn:"✓ أعرف هذا",revBtn:"↩ راجع مجدداً",weakBtn:"⚑ ضعيف",next:"→ التالي",nav:"مؤشر البطاقات"},
+    pr:{title:"أسئلة التدريب",submit:"تسليم الإجابة",correct:"✓ صحيح!",incorrect:"✗ خطأ"},
+    mk:{title:"الامتحان التجريبي",sub:"امتحان موقوت",desc:"محاكاة ظروف امتحان PMP الحقيقي · لا توجد تغذية راجعة أثناء الامتحان",qs:"سؤال",demo:"العرض يتضمن",max:"سؤال كحد أقصى",start:"ابدأ الامتحان ←",back:"رجوع →",next:"→ التالي",submitE:"تسليم الامتحان ✓",resC:"صحيح",resT:"الوقت",pass:"🎉 درجة ناجحة! استمر في العمل الرائع!",fail:"📚 أقل من 70%. راجع نقاط الضعف وحاول مجدداً.",retry:"حاول مجدداً"},
+    fo:{title:"المعادلات والمفاهيم الأساسية",ex:"مثال:",all:"الكل"},
+    ag:{title:"أجايل والهجين",sub:"مفاهيم أجايل الأساسية وإطار Scrum وعقلية الامتحان",man:"بيان أجايل — 4 قيم أساسية",cyc:"دورة Sprint في Scrum",
+      mv:["الأفراد والتفاعلات فوق العمليات والأدوات","البرنامج العامل فوق التوثيق الشامل","تعاون العميل فوق التفاوض على العقد","الاستجابة للتغيير فوق اتباع الخطة"],
+      cs:["📋 قائمة المتراكمات","📅 تخطيط السبرنت","⚙️ تنفيذ السبرنت","☀️ Scrum اليومي","✅ مراجعة السبرنت","🔄 الاستعراض"]},
+    no:{title:"ملاحظاتي الشخصية",add:"إضافة ملاحظة جديدة",topic:"الموضوع",ph:"اكتب ملاحظتك هنا...",save:"حفظ الملاحظة",empty:"لا توجد ملاحظات بعد. ابدأ بإضافة ملاحظات!"},
+    rv:{title:"⚡ مراجعة سريعة",sub:"وضع المسح السريع — حقائق، مصائد، معادلات، وعقلية",
+      secs:[["definitions","📌 التعريفات الأساسية"],["traps","⚠️ مصائد الامتحان"],["formulas","🧮 المعادلات"],["mindset","🧠 عقلية مدير المشروع"]],
+      definitions:["المشروع: مسعى مؤقت وفريد له بداية ونهاية","الميثاق: يُخوّل المشروع رسمياً — يُنشئه الراعي","هيكل تفصيل العمل: يُفصّل المُخرجات (ليس المهام) هرمياً","المسار الحرج: أطول مسار = أقصر مدة للمشروع","الوقت الاحتياطي = صفر على أنشطة المسار الحرج","المخاطرة: حدث غير مؤكد ذو تأثير إيجابي أو سلبي","القضية: خطر وقع بالفعل","التحكم في التغيير: جميع التغييرات تمر عبر ICC — بلا استثناء","الجودة: الوقاية > الفحص","القائد الخادم: يُزيل العقبات ويُمكّن نجاح الفريق"],
+      traps:["الراعي يُنشئ الميثاق — ليس مدير المشروع","هيكل تفصيل العمل يُفصّل المُخرجات، ليس الأنشطة","الطلاء الذهبي = دائماً سيء — لا تضف ميزات غير معتمدة","مرّر دائماً عبر عملية التحكم في التغيير","CPI/SPI أقل من 1 = أداء سيء، أكبر من 1 = جيد","سجل المخاطر ≠ سجل القضايا — وثيقتان مختلفتان","مدير المشروع يُسلّم — الراعي يملك القيمة التجارية","أجايل يحتضن التغيير لكنه يُخطط — ليس فوضى","نطاق السبرنت محمي — صاحب المنتج يلغي، لا يضيف","إضافة معنيّ واحد تضيف ن قنوات اتصال جديدة"],
+      formulas:["CPI = EV/AC  (أكبر من 1 = أقل من الميزانية ✓)","SPI = EV/PV  (أكبر من 1 = متقدم عن الجدول ✓)","CV = EV−AC  (موجب = أقل من الميزانية ✓)","SV = EV−PV  (موجب = متقدم عن الجدول ✓)","EAC = BAC/CPI  (التنبؤ الأكثر استخداماً)","ETC = EAC−AC  (التكلفة المتبقية للإكمال)","VAC = BAC−EAC  (موجب = سينتهي أقل من الميزانية)","PERT = (O+4M+P)/6  (التقدير ثلاثي النقاط)","القنوات = ن(ن−1)/2  (تعقيد الاتصالات)","الوقت الاحتياطي = LS−ES = LF−EF  (صفر على المسار الحرج)"],
+      mindset:["فكّر بشكل استباقي — عالج المخاطر قبل أن تصبح قضايا","اختر دائماً التعاون والحلول المربحة للجميع أولاً","التواصل هو أهم مهارة لمدير المشروع","أجايل: احتضن التغيير، سلّم القيمة تدريجياً، افحص وتكيّف","عند الشك: اتبع العملية، حدّث الخطة، تواصل","مكّن الفريق — تجنب الإشراف المفرط بأي ثمن","إدارة المخاطر مستمرة طوال المشروع بأكمله","تحدث مع المعنيين أولاً — هي دائماً الإجابة الصحيحة","ركّز على تسليم القيمة التجارية، ليس مجرد إتمام المهام","أفضل المديرين يُيسّرون القرارات — لا يتخذونها دائماً"]},
+    footer:"برو لدراسة PMP · دليل PMBOK® الإصدار السابع · التقدم محفوظ تلقائياً",
+  },
+};
+
+const DOM=[
+  {id:"people",icon:"👥",col:C.gold,pct:42,
+   en:{lbl:"People",desc:"Leadership, team dynamics, stakeholder engagement, conflict resolution, and communication.",topics:[{id:"leadership",lbl:"Leadership Styles"},{id:"teams",lbl:"High-Performing Teams"},{id:"conflict",lbl:"Conflict Resolution"},{id:"stakeholders",lbl:"Stakeholder Engagement"},{id:"communication",lbl:"Communication Mgmt"},{id:"motivation",lbl:"Motivation Theories"},{id:"emotional",lbl:"Emotional Intelligence"},{id:"negotiation",lbl:"Negotiation"}]},
+   ar:{lbl:"الأفراد",desc:"القيادة، ديناميكيات الفريق، إشراك المعنيين، حل النزاعات، والتواصل.",topics:[{id:"leadership",lbl:"أنماط القيادة"},{id:"teams",lbl:"الفرق عالية الأداء"},{id:"conflict",lbl:"حل النزاعات"},{id:"stakeholders",lbl:"إشراك المعنيين"},{id:"communication",lbl:"إدارة الاتصالات"},{id:"motivation",lbl:"نظريات التحفيز"},{id:"emotional",lbl:"الذكاء العاطفي"},{id:"negotiation",lbl:"التفاوض"}]}},
+  {id:"process",icon:"⚙️",col:"#378add",pct:50,
+   en:{lbl:"Process",desc:"Technical project management: scope, schedule, cost, quality, risk, procurement, integration.",topics:[{id:"scope",lbl:"Scope Management"},{id:"schedule",lbl:"Schedule Management"},{id:"cost",lbl:"Cost & EVM"},{id:"quality",lbl:"Quality Management"},{id:"risk",lbl:"Risk Management"},{id:"procurement",lbl:"Procurement"},{id:"integration",lbl:"Integration Mgmt"},{id:"wbs",lbl:"WBS"},{id:"cpm",lbl:"Critical Path Method"}]},
+   ar:{lbl:"العمليات",desc:"إدارة المشاريع التقنية: النطاق، الجدول الزمني، التكلفة، الجودة، المخاطر، المشتريات، التكامل.",topics:[{id:"scope",lbl:"إدارة النطاق"},{id:"schedule",lbl:"إدارة الجدول الزمني"},{id:"cost",lbl:"التكلفة وEVM"},{id:"quality",lbl:"إدارة الجودة"},{id:"risk",lbl:"إدارة المخاطر"},{id:"procurement",lbl:"المشتريات"},{id:"integration",lbl:"إدارة التكامل"},{id:"wbs",lbl:"هيكل تفصيل العمل"},{id:"cpm",lbl:"طريقة المسار الحرج"}]}},
+  {id:"business",icon:"🌐",col:"#1d9e75",pct:8,
+   en:{lbl:"Business Environment",desc:"Strategy alignment, benefits realization, compliance, organizational change, value delivery.",topics:[{id:"benefits",lbl:"Benefits Realization"},{id:"compliance",lbl:"Compliance & Governance"},{id:"strategy",lbl:"Strategy Alignment"},{id:"change_mgmt",lbl:"Organizational Change"},{id:"value",lbl:"Value Delivery"}]},
+   ar:{lbl:"بيئة الأعمال",desc:"محاذاة الاستراتيجية، تحقيق الفوائد، الامتثال، التغيير التنظيمي، تسليم القيمة.",topics:[{id:"benefits",lbl:"تحقيق الفوائد"},{id:"compliance",lbl:"الامتثال والحوكمة"},{id:"strategy",lbl:"محاذاة الاستراتيجية"},{id:"change_mgmt",lbl:"التغيير التنظيمي"},{id:"value",lbl:"تسليم القيمة"}]}},
+];
+
+const FC=[
+  {id:1,topic:"integration",en:{q:"What is a Project?",a:"A temporary endeavor to create a unique product, service, or result.",exp:"TEMPORARY (start/end) and UNIQUE (not routine). This distinguishes projects from operations.",dom:"Process"},ar:{q:"ما هو المشروع؟",a:"مسعى مؤقت لإنشاء منتج أو خدمة أو نتيجة فريدة.",exp:"الكلمتان الجوهريتان: مؤقت وفريد. هذا ما يميز المشاريع عن العمليات.",dom:"العمليات"}},
+  {id:2,topic:"integration",en:{q:"What is the Project Charter?",a:"Formally authorizes the project and grants the PM authority to apply resources.",exp:"Created by the Sponsor, NOT the PM. Must be signed before detailed planning begins.",dom:"Process"},ar:{q:"ما هي ميثاق المشروع؟",a:"يُخوّل المشروع رسمياً ويمنح مدير المشروع صلاحية استخدام الموارد.",exp:"يُنشئها الراعي وليس مدير المشروع. يجب توقيعها قبل بدء التخطيط المفصّل.",dom:"العمليات"}},
+  {id:3,topic:"cpm",en:{q:"What is the Critical Path?",a:"The longest path through the network = shortest possible project duration. Zero float.",exp:"Any delay on the critical path delays the entire project.",dom:"Process"},ar:{q:"ما هو المسار الحرج؟",a:"أطول مسار في الشبكة = أقصر مدة ممكنة للمشروع. وقت احتياطي صفر.",exp:"أي تأخير في المسار الحرج يؤخر المشروع بأكمله.",dom:"العمليات"}},
+  {id:4,topic:"cost",en:{q:"CPI: formula and meaning?",a:"CPI = EV / AC. >1 = under budget. <1 = over budget.",exp:"CPI=0.85 means $0.85 of work per $1 spent. Always compare EV to AC.",dom:"Process"},ar:{q:"CPI: الصيغة والمعنى؟",a:"CPI = EV / AC. أكبر من 1 = أقل من الميزانية. أقل من 1 = تجاوز.",exp:"CPI=0.85 يعني 0.85$ من العمل مقابل كل دولار تنفقه.",dom:"العمليات"}},
+  {id:5,topic:"schedule",en:{q:"SPI: formula and meaning?",a:"SPI = EV / PV. >1 = ahead. <1 = behind schedule.",exp:"SPI=1.1 means 10% ahead of schedule. Use with CPI to assess project health.",dom:"Process"},ar:{q:"SPI: الصيغة والمعنى؟",a:"SPI = EV / PV. أكبر من 1 = متقدم. أقل من 1 = متأخر.",exp:"SPI=1.1 يعني تقدماً بنسبة 10%. استخدمه مع CPI لتقييم صحة المشروع.",dom:"العمليات"}},
+  {id:6,topic:"risk",en:{q:"4 Risk Response Strategies (Threats)?",a:"Avoid – Transfer – Mitigate – Accept",exp:"Avoid=eliminate, Transfer=shift to 3rd party, Mitigate=reduce probability/impact, Accept=monitor.",dom:"Process"},ar:{q:"استراتيجيات الاستجابة الأربع للمخاطر؟",a:"تجنب – نقل – تخفيف – قبول",exp:"التجنب=إلغاء، النقل=طرف ثالث، التخفيف=تقليل الاحتمالية/التأثير، القبول=المراقبة.",dom:"العمليات"}},
+  {id:7,topic:"leadership",en:{q:"What is Servant Leadership?",a:"The leader removes obstacles and empowers the team rather than commanding.",exp:"Core to Agile/Scrum. Scrum Master = servant leader. Empowerment not control.",dom:"People"},ar:{q:"ما هي القيادة الخادمة؟",a:"القائد يُزيل العقبات ويُمكّن الفريق بدلاً من الأوامر.",exp:"أساسية في Agile/Scrum. Scrum Master = قائد خادم.",dom:"الأفراد"}},
+  {id:8,topic:"communication",en:{q:"Communication Channels Formula?",a:"N × (N−1) / 2, where N = number of stakeholders",exp:"5 people = 10 channels. 10 people = 45 channels. Adding 1 person adds N channels.",dom:"People"},ar:{q:"صيغة قنوات الاتصال؟",a:"ن × (ن-1) / 2، حيث ن = عدد المعنيين",exp:"5 معنيين = 10 قنوات. 10 معنيين = 45 قناة.",dom:"الأفراد"}},
+  {id:9,topic:"scope",en:{q:"What is Gold Plating?",a:"Adding unapproved features beyond agreed scope without change control.",exp:"Always bad. Wastes resources, bypasses change process. Deliver only what was agreed.",dom:"Process"},ar:{q:"ما هو الطلاء الذهبي؟",a:"إضافة ميزات غير معتمدة تتجاوز النطاق المتفق عليه.",exp:"دائماً سيء. يُهدر الموارد ويتجاوز عملية التغيير.",dom:"العمليات"}},
+  {id:10,topic:"teams",en:{q:"What is a RACI Matrix?",a:"Responsible, Accountable, Consulted, Informed — clarifies roles per activity.",exp:"Only ONE Accountable per task. Multiple can be Responsible. Prevents confusion.",dom:"People"},ar:{q:"ما هي مصفوفة RACI؟",a:"مسؤول، محاسَب، مستشار، مُبلَّغ — تُوضح الأدوار لكل نشاط.",exp:"شخص واحد فقط محاسَب لكل مهمة. يمنع تضارب الملكية.",dom:"الأفراد"}},
+  {id:11,topic:"cost",en:{q:"EAC — most common formula?",a:"EAC = BAC / CPI — assumes current cost performance continues.",exp:"BAC=$100K, CPI=0.80 → EAC=$125K.",dom:"Process"},ar:{q:"EAC — الصيغة الأكثر استخداماً؟",a:"EAC = BAC / CPI — يفترض استمرار أداء التكلفة الحالي.",exp:"BAC=100K$، CPI=0.80 → EAC=125K$.",dom:"العمليات"}},
+  {id:12,topic:"schedule",en:{q:"What is Float (Slack)?",a:"Time an activity can be delayed without delaying the project. Zero float = Critical Path.",exp:"Float = LS−ES or LF−EF. More float = more scheduling flexibility.",dom:"Process"},ar:{q:"ما هو الوقت الاحتياطي (Float)؟",a:"المدة التي يمكن تأخير النشاط بها دون تأخير المشروع. صفر = مسار حرج.",exp:"Float = LS−ES أو LF−EF. وقت احتياطي أكبر = مرونة أكثر.",dom:"العمليات"}},
+  {id:13,topic:"wbs",en:{q:"What is the WBS?",a:"Hierarchical decomposition of total scope into manageable work packages.",exp:"Decomposes DELIVERABLES, not activities. 100% rule: must capture all scope.",dom:"Process"},ar:{q:"ما هو هيكل تفصيل العمل WBS؟",a:"تحليل هرمي للنطاق الكلي إلى حزم عمل قابلة للإدارة.",exp:"يُفصّل المُخرجات وليس الأنشطة. قاعدة 100%: يجب أن يشمل كل النطاق.",dom:"العمليات"}},
+  {id:14,topic:"stakeholders",en:{q:"Power/Interest Grid: High Power, Low Interest?",a:"Keep Satisfied — meet needs without overwhelming with details.",exp:"High/High=Manage Closely, High/Low=Keep Satisfied, Low/High=Keep Informed, Low/Low=Monitor.",dom:"People"},ar:{q:"شبكة القوة/الاهتمام: قوة عالية، اهتمام منخفض؟",a:"إبقاؤهم راضين — تلبية احتياجاتهم دون إثقالهم بالتفاصيل.",exp:"عالٍ/عالٍ=إدارة مكثفة، عالٍ/منخفض=إبقاء راضٍ، منخفض/عالٍ=إبقاء مُبلَّغ، منخفض/منخفض=مراقبة.",dom:"الأفراد"}},
+  {id:15,topic:"agile",en:{q:"Agile Manifesto's first value?",a:"Individuals and interactions OVER processes and tools.",exp:"4 values: People>Process, Working software>Docs, Customer collab>Contract, Change>Plan.",dom:"Process"},ar:{q:"القيمة الأولى في بيان أجايل؟",a:"الأفراد والتفاعلات فوق العمليات والأدوات.",exp:"4 قيم: الأفراد>العمليات، البرنامج العامل>التوثيق، تعاون العميل>العقد، التغيير>الخطة.",dom:"العمليات"}},
+  {id:16,topic:"agile",en:{q:"What is a Sprint?",a:"A fixed time-box (1–4 weeks) in which a shippable product increment is created.",exp:"Sprint scope is protected. Sprint Backlog owned by Dev Team. PO can cancel a sprint.",dom:"Process"},ar:{q:"ما هو السبرنت (Sprint)؟",a:"حقبة زمنية محددة (1-4 أسابيع) يُنتج فيها نسخة قابلة للشحن.",exp:"نطاق السبرنت محمي. قائمته مملوكة لفريق التطوير. صاحب المنتج يمكنه إلغاؤه.",dom:"العمليات"}},
+  {id:17,topic:"motivation",en:{q:"Maslow's Hierarchy of Needs (order)?",a:"Physiological → Safety → Social → Esteem → Self-Actualization",exp:"People satisfy lower needs before higher ones motivate them.",dom:"People"},ar:{q:"هرم ماسلو للاحتياجات (بالترتيب)؟",a:"فسيولوجية ← أمان ← اجتماعية ← تقدير ← تحقيق الذات",exp:"يُشبع الناس الاحتياجات الدنيا قبل أن تُحفزهم العليا.",dom:"الأفراد"}},
+  {id:18,topic:"schedule",en:{q:"PERT Estimate Formula?",a:"PERT = (O + 4M + P) / 6",exp:"O=Optimistic, M=Most Likely, P=Pessimistic. Example: O=4, M=6, P=14 → PERT=7 days.",dom:"Process"},ar:{q:"صيغة تقدير PERT؟",a:"PERT = (O + 4M + P) / 6",exp:"O=متفائل، M=الأرجح، P=متشائم. مثال: O=4، M=6، P=14 → PERT=7 أيام.",dom:"العمليات"}},
+  {id:19,topic:"integration",en:{q:"What is Integrated Change Control (ICC)?",a:"Process to review, approve, or reject all change requests across the project.",exp:"ALL changes go through ICC regardless of requester. CCB evaluates impact.",dom:"Process"},ar:{q:"ما هو التحكم المتكامل في التغيير (ICC)؟",a:"عملية لمراجعة وإقرار أو رفض جميع طلبات التغيير.",exp:"جميع التغييرات تمر عبر ICC. لجنة التغيير (CCB) تُقيّم التأثير.",dom:"العمليات"}},
+  {id:20,topic:"quality",en:{q:"What is the cost of quality principle?",a:"Prevention costs less than inspection, which costs less than failure.",exp:"Invest in prevention (training, standards) to avoid expensive rework and failures.",dom:"Process"},ar:{q:"ما هو مبدأ تكلفة الجودة؟",a:"الوقاية أقل تكلفة من الفحص، والفحص أقل تكلفة من الفشل.",exp:"استثمر في الوقاية (التدريب، المعايير) لتجنب إعادة العمل المكلفة.",dom:"العمليات"}},
+];
+
+const QS=[
+  {id:1,topic:"leadership",en:{dom:"People",q:"Your team is highly experienced and self-managing. What leadership style is MOST appropriate?",opts:["Directive — closely supervise all work","Delegating — provide autonomy and trust expertise","Coaching — regularly mentor each member","Autocratic — make all decisions alone"],correct:1,exp:"Experienced self-managing teams thrive with delegating leadership. The PM trusts their expertise.",tip:"Match style to maturity: Low→Directive, Developing→Coaching, Expert→Delegating."},
+                              ar:{dom:"الأفراد",q:"فريقك ذو خبرة عالية ويدير نفسه. ما أسلوب القيادة الأنسب؟",opts:["توجيهي — إشراف مكثف على جميع الأعمال","تفويضي — منح الاستقلالية والثقة في الخبرة","تدريبي — إرشاد منتظم لكل عضو","استبدادي — اتخاذ جميع القرارات منفرداً"],correct:1,exp:"الفرق ذات الخبرة تزدهر مع التفويض. المدير يثق بخبرتهم.",tip:"طابق الأسلوب مع نضج الفريق: منخفض→توجيهي، نامٍ→تدريبي، خبير→تفويضي."}},
+  {id:2,topic:"risk",en:{dom:"Process",q:"During execution you identify a new risk: 30% probability, high impact. What do you do FIRST?",opts:["Immediately escalate to sponsor for budget","Update the risk register and analyze per the risk management plan","Implement a workaround right away","Document it in lessons learned"],correct:1,exp:"First update the risk register and analyze. Assess before acting. Workarounds are for issues, not identified risks.",tip:"Sequence: Identify → Analyze → Plan Response → Implement."},
+                         ar:{dom:"العمليات",q:"خلال التنفيذ تُحدد خطراً جديداً: احتمال 30%، تأثير عالٍ. ماذا تفعل أولاً؟",opts:["الإبلاغ الفوري للراعي لطلب ميزانية","تحديث سجل المخاطر وتحليله وفق خطة إدارة المخاطر","تنفيذ حل مؤقت فوراً","توثيقه في الدروس المستفادة"],correct:1,exp:"أولاً تحديث سجل المخاطر والتحليل. قيّم قبل التصرف. الحلول المؤقتة للقضايا لا للمخاطر المُحددة.",tip:"التسلسل: تحديد → تحليل → تخطيط الاستجابة → تنفيذ."}},
+  {id:3,topic:"cost",en:{dom:"Process",q:"EV=$400K, AC=$500K, PV=$450K. What is your CPI and what does it mean?",opts:["CPI=1.25 — under budget","CPI=0.80 — over budget","CPI=0.89 — ahead of schedule","CPI=0.80 — ahead of schedule"],correct:1,exp:"CPI=EV/AC=400/500=0.80. You get $0.80 of work per $1 spent — over budget. SPI=0.89 — behind schedule.",tip:"CPI=EV/AC (Cost). SPI=EV/PV (Schedule). Both >1 = good."},
+                         ar:{dom:"العمليات",q:"EV=400K$، AC=500K$، PV=450K$. ما هو CPI وما معناه؟",opts:["CPI=1.25 — أقل من الميزانية","CPI=0.80 — تجاوز الميزانية","CPI=0.89 — متقدم عن الجدول","CPI=0.80 — متقدم عن الجدول"],correct:1,exp:"CPI=EV/AC=400/500=0.80. تحصل على 0.80$ مقابل كل دولار — تجاوز الميزانية.",tip:"CPI=EV/AC (التكلفة). SPI=EV/PV (الجدول). كلاهما أكبر من 1 = جيد."}},
+  {id:4,topic:"conflict",en:{dom:"People",q:"Two senior members have an ongoing conflict affecting morale. Informal resolution failed. Best next step?",opts:["Ignore it — hope it self-resolves","Separate them with no shared tasks","Formally address with structured conflict resolution; involve HR if needed","Escalate immediately to sponsor"],correct:2,exp:"When informal fails, address formally. Ignoring damages the project. Separation may not be feasible.",tip:"Resolution order: Confronting > Compromising > Smoothing > Forcing > Withdrawal."},
+                             ar:{dom:"الأفراد",q:"عضوان لديهما نزاع مستمر يؤثر على الروح المعنوية. فشل الحل غير الرسمي. ما الخطوة الأفضل؟",opts:["تجاهله وأمل حل نفسه","فصلهما بلا مهام مشتركة","معالجته رسمياً بتقنيات منظمة؛ إشراك الموارد البشرية إذا لزم","تصعيده فوراً للراعي"],correct:2,exp:"عند فشل الحل غير الرسمي، عالج الأمر رسمياً. التجاهل يضر بالمشروع.",tip:"ترتيب حل النزاع: مواجهة > تسوية > تخفيف > إكراه > انسحاب."}},
+  {id:5,topic:"scope",en:{dom:"Process",q:"A high-authority stakeholder requests a significant scope expansion. What should the PM do?",opts:["Implement immediately — they have authority","Refuse to protect original scope","Submit through Integrated Change Control for evaluation","Implement but note in lessons learned"],correct:2,exp:"ALL scope changes must go through ICC regardless of who asks. CCB evaluates impact.",tip:"No matter who asks — ALL changes go through Change Control. Non-negotiable."},
+                          ar:{dom:"العمليات",q:"معنيّ ذو سلطة عالية يطلب توسعاً كبيراً في النطاق. ماذا يفعل مدير المشروع؟",opts:["تنفيذه فوراً — له السلطة","الرفض لحماية النطاق الأصلي","تقديمه عبر التحكم المتكامل في التغيير للتقييم","تنفيذه وتوثيقه في الدروس المستفادة"],correct:2,exp:"جميع تغييرات النطاق يجب أن تمر عبر التحكم المتكامل في التغيير.",tip:"بغض النظر عن الطالب — جميع التغييرات تمر عبر عملية التحكم."}},
+  {id:6,topic:"agile",en:{dom:"Process",q:"Mid-sprint, the Product Owner wants to add a high-priority feature to the current sprint. What happens?",opts:["Add it immediately — high priority overrides sprint","Scrum Master decides based on capacity","Discuss; if change is significant, PO may cancel sprint and replan","Refuse — sprint backlog is fixed"],correct:2,exp:"Sprint scope is protected but the PO can cancel if change is significant. Adding mid-sprint violates principles.",tip:"Sprint backlog owned by Dev Team. Only major changes justify cancellation."},
+                          ar:{dom:"العمليات",q:"في منتصف السبرنت، صاحب المنتج يريد إضافة ميزة عالية الأولوية. ماذا يحدث؟",opts:["إضافتها فوراً — الأولوية العالية تتجاوز السبرنت","Scrum Master يقرر بناءً على الطاقة","النقاش؛ إذا كان التغيير جوهرياً، صاحب المنتج قد يلغي السبرنت","الرفض — قائمة السبرنت ثابتة"],correct:2,exp:"نطاق السبرنت محمي لكن صاحب المنتج يمكنه إلغاؤه إذا كان التغيير جوهرياً.",tip:"قائمة السبرنت مملوكة لفريق التطوير. تغييرات النطاق الكبيرة فقط تبرر الإلغاء."}},
+  {id:7,topic:"stakeholders",en:{dom:"People",q:"A stakeholder has HIGH power but LOW interest. How should you engage them?",opts:["Manage closely — frequent involvement","Keep satisfied — meet needs without overwhelming","Monitor — minimal engagement","Keep informed — detailed regular reports"],correct:1,exp:"Power/Interest Grid: High Power + Low Interest = Keep Satisfied. Don't waste their time.",tip:"High/High=Manage Closely, High/Low=Keep Satisfied, Low/High=Keep Informed, Low/Low=Monitor."},
+                                ar:{dom:"الأفراد",q:"معنيّ ذو سلطة عالية لكن اهتمام منخفض. كيف تتعامل معه؟",opts:["إدارة مكثفة — مشاركة متكررة","إبقاؤه راضياً — تلبية الاحتياجات دون إثقاله","مراقبة — تعامل أدنى","إبقاؤه مُبلَّغاً — تقارير مفصلة منتظمة"],correct:1,exp:"شبكة القوة/الاهتمام: قوة عالية + اهتمام منخفض = إبقاؤه راضياً.",tip:"عالٍ/عالٍ=إدارة مكثفة، عالٍ/منخفض=إبقاء راضٍ، منخفض/عالٍ=مُبلَّغ، منخفض/منخفض=مراقبة."}},
+  {id:8,topic:"benefits",en:{dom:"Biz Env.",q:"The project is complete. Expected business benefits haven't been realized. Who is responsible?",opts:["Project Manager — should stay engaged","Project Sponsor — benefits are organizational responsibility","PMO — tracks all organizational benefits","Customer — they now own the product"],correct:1,exp:"Benefits realization is the sponsor's responsibility. PM's role ends at project closure.",tip:"PM=delivers the project. Sponsor=ensures business value is realized post-delivery."},
+                            ar:{dom:"بيئة الأعمال",q:"المشروع مكتمل. الفوائد التجارية المتوقعة لم تتحقق بعد. من المسؤول؟",opts:["مدير المشروع — يجب أن يبقى متواصلاً","راعي المشروع — الفوائد مسؤولية تنظيمية","مكتب إدارة المشاريع","العميل — هو يملك المنتج الآن"],correct:1,exp:"تحقيق الفوائد مسؤولية الراعي والمؤسسة. دور المدير ينتهي عند إغلاق المشروع.",tip:"مدير المشروع=يُسلّم. الراعي=يضمن تحقق القيمة التجارية."}},
+];
+
+const FO=[
+  {id:"ev",cat:"EVM Core",f:"EV = % Complete × BAC",en:{nm:"Earned Value (EV)",desc:"Value of work actually completed, expressed in budget terms.",ex:"BAC=$100K, 60% done → EV=$60K"},ar:{nm:"القيمة المكتسبة (EV)",desc:"قيمة العمل المنجز فعلاً بمصطلحات الميزانية.",ex:"BAC=100K$، 60% مكتمل → EV=60K$"}},
+  {id:"pv",cat:"EVM Core",f:"PV = % Planned × BAC",en:{nm:"Planned Value (PV)",desc:"Budgeted value of work that should have been completed by now.",ex:"BAC=$100K, 70% planned → PV=$70K"},ar:{nm:"القيمة المخططة (PV)",desc:"القيمة المُدرجة في الميزانية للعمل الذي كان يجب إنجازه.",ex:"BAC=100K$، 70% مخطط → PV=70K$"}},
+  {id:"cpi",cat:"EVM Efficiency",f:"CPI = EV / AC",en:{nm:"Cost Performance Index",desc:">1=under budget, <1=over budget, =1=on budget.",ex:"EV=$60K, AC=$75K → CPI=0.80 (over budget)"},ar:{nm:"مؤشر أداء التكلفة (CPI)",desc:"أكبر من 1=أقل من الميزانية، أقل من 1=تجاوز.",ex:"EV=60K$، AC=75K$ → CPI=0.80 (تجاوز الميزانية)"}},
+  {id:"spi",cat:"EVM Efficiency",f:"SPI = EV / PV",en:{nm:"Schedule Performance Index",desc:">1=ahead, <1=behind, =1=on schedule.",ex:"EV=$60K, PV=$70K → SPI=0.857 (behind)"},ar:{nm:"مؤشر أداء الجدول (SPI)",desc:"أكبر من 1=متقدم، أقل من 1=متأخر.",ex:"EV=60K$، PV=70K$ → SPI=0.857 (متأخر)"}},
+  {id:"cv",cat:"EVM Variance",f:"CV = EV − AC",en:{nm:"Cost Variance",desc:"Positive=under budget. Negative=over budget.",ex:"EV=$60K, AC=$75K → CV=−$15K (over budget)"},ar:{nm:"فارق التكلفة (CV)",desc:"موجب=أقل من الميزانية. سالب=تجاوز.",ex:"EV=60K$، AC=75K$ → CV=−15K$ (تجاوز)"}},
+  {id:"sv",cat:"EVM Variance",f:"SV = EV − PV",en:{nm:"Schedule Variance",desc:"Positive=ahead. Negative=behind.",ex:"EV=$60K, PV=$70K → SV=−$10K (behind)"},ar:{nm:"فارق الجدول (SV)",desc:"موجب=متقدم. سالب=متأخر.",ex:"EV=60K$، PV=70K$ → SV=−10K$ (متأخر)"}},
+  {id:"eac1",cat:"EVM Forecast",f:"EAC = BAC / CPI",en:{nm:"EAC (CPI-based)",desc:"Forecasts total cost assuming current trend continues. Most common.",ex:"BAC=$100K, CPI=0.80 → EAC=$125K"},ar:{nm:"EAC (مبني على CPI)",desc:"يتنبأ بالتكلفة الإجمالية بافتراض استمرار الاتجاه الحالي.",ex:"BAC=100K$، CPI=0.80 → EAC=125K$"}},
+  {id:"eac2",cat:"EVM Forecast",f:"EAC = AC + (BAC − EV)",en:{nm:"EAC (remaining at plan rate)",desc:"Assumes remaining work done at original budgeted rate.",ex:"AC=$75K, BAC=$100K, EV=$60K → EAC=$115K"},ar:{nm:"EAC (الباقي وفق معدل الخطة)",desc:"يفترض إتمام العمل المتبقي بالمعدل الأصلي.",ex:"AC=75K$، BAC=100K$، EV=60K$ → EAC=115K$"}},
+  {id:"etc",cat:"EVM Forecast",f:"ETC = EAC − AC",en:{nm:"Estimate to Complete",desc:"How much more money is needed to finish from today.",ex:"EAC=$125K, AC=$75K → ETC=$50K remaining"},ar:{nm:"التقدير حتى الاكتمال (ETC)",desc:"كم من المال مطلوب إضافياً للإنهاء من الآن.",ex:"EAC=125K$، AC=75K$ → ETC=50K$ متبقي"}},
+  {id:"vac",cat:"EVM Forecast",f:"VAC = BAC − EAC",en:{nm:"Variance at Completion",desc:"Positive=finish under budget. Negative=overrun.",ex:"BAC=$100K, EAC=$125K → VAC=−$25K (overrun)"},ar:{nm:"الفارق عند الاكتمال (VAC)",desc:"موجب=إنهاء أقل من الميزانية. سالب=تجاوز.",ex:"BAC=100K$، EAC=125K$ → VAC=−25K$ (تجاوز)"}},
+  {id:"pert",cat:"Estimation",f:"(O + 4M + P) / 6",en:{nm:"PERT Estimate",desc:"Three-point weighted estimate accounting for uncertainty.",ex:"O=4d, M=6d, P=14d → PERT=7 days"},ar:{nm:"تقدير PERT",desc:"تقدير مرجح بثلاث نقاط يأخذ عدم اليقين بعين الاعتبار.",ex:"O=4، M=6، P=14 → PERT=7 أيام"}},
+  {id:"comm",cat:"Communication",f:"N × (N−1) / 2",en:{nm:"Communication Channels",desc:"Total potential channels with N stakeholders.",ex:"10 stakeholders → 45 channels; 11 → 55"},ar:{nm:"قنوات الاتصال",desc:"إجمالي القنوات المحتملة مع ن معنيين.",ex:"10 معنيين → 45 قناة؛ 11 → 55"}},
+  {id:"float",cat:"Schedule",f:"Float = LS − ES = LF − EF",en:{nm:"Total Float",desc:"How long activity can delay without delaying project. Zero = Critical Path.",ex:"ES=Day 5, LS=Day 8 → Float=3 days"},ar:{nm:"الوقت الاحتياطي الكلي",desc:"المدة التي يمكن تأخير النشاط بها دون تأخير المشروع. صفر = مسار حرج.",ex:"ES=يوم 5، LS=يوم 8 → وقت احتياطي=3 أيام"}},
+];
+
+const AG=[
+  {en:{t:"Scrum",d:"Agile framework using fixed-length sprints (1–4 weeks) to deliver incremental value.",k:"Roles: Product Owner, Scrum Master, Developers. Events: Sprint Planning, Daily Scrum, Review, Retrospective."},ar:{t:"Scrum",d:"إطار رشيق يستخدم سبرنتات ذات مدة ثابتة (1-4 أسابيع) لتسليم قيمة تدريجية.",k:"الأدوار: صاحب المنتج، Scrum Master، المطورون. الأحداث: التخطيط، Scrum اليومي، المراجعة، الاستعراض."}},
+  {en:{t:"Kanban",d:"Visual workflow method using a board (To Do → In Progress → Done).",k:"WIP limits prevent overload. Focus: continuous flow, not fixed iterations."},ar:{t:"Kanban",d:"منهج سير عمل بصري يستخدم لوحة (للقيام → قيد التنفيذ → مكتمل).",k:"حدود WIP تمنع التحميل الزائد. التركيز على التدفق المستمر لا التكرارات."}},
+  {en:{t:"Product Backlog",d:"Ordered list of everything needed in the product, owned by the Product Owner.",k:"Contains user stories, epics, bugs. Highest priority items must be refined and ready."},ar:{t:"قائمة متراكمات المنتج",d:"قائمة مرتبة بكل ما هو مطلوب في المنتج، يمتلكها صاحب المنتج.",k:"تحتوي على قصص المستخدم، الملاحم، الأخطاء. الأولويات الأعلى يجب أن تكون جاهزة."}},
+  {en:{t:"Sprint Backlog",d:"Selected Product Backlog items for a Sprint plus the team's implementation plan.",k:"Owned by Dev Team. Cannot be changed during sprint without team agreement."},ar:{t:"قائمة متراكمات السبرنت",d:"عناصر قائمة المنتج المختارة للسبرنت مضافاً إليها خطة التنفيذ.",k:"مملوكة لفريق التطوير. لا يمكن تغييرها خلال السبرنت دون موافقة الفريق."}},
+  {en:{t:"Definition of Done",d:"Shared quality checklist that must be met before work is considered complete.",k:"Team-owned. Prevents 'almost done'. Ensures increment is truly shippable every sprint."},ar:{t:"تعريف الاكتمال",d:"قائمة جودة مشتركة يجب استيفاؤها قبل اعتبار العمل مكتملاً.",k:"تمتلكها الفريق. تمنع 'شبه المكتمل'. تضمن قابلية الشحن في كل سبرنت."}},
+  {en:{t:"Velocity",d:"Amount of work a team completes per sprint, measured in story points.",k:"Used for forecasting. Use historical average (last 3 sprints) for planning, not capacity."},ar:{t:"السرعة (Velocity)",d:"كمية العمل التي يُنجزها الفريق في كل سبرنت، مقاسةً بنقاط القصة.",k:"تُستخدم للتنبؤ. استخدم المتوسط التاريخي (آخر 3 سبرنتات) للتخطيط."}},
+  {en:{t:"Servant Leadership",d:"Leader prioritizes team needs: removes obstacles, enables success, empowers individuals.",k:"Core to Scrum Master. Contrasts with command-and-control. Enables self-organization."},ar:{t:"القيادة الخادمة",d:"القائد يُولي أولوية لاحتياجات الفريق: يُزيل العقبات ويُمكّن النجاح والأفراد.",k:"أساسية لدور Scrum Master. تتناقض مع القيادة التوجيهية. تُمكّن التنظيم الذاتي."}},
+  {en:{t:"Retrospective",d:"Sprint event where the team reflects on processes and identifies improvements.",k:"Focus: HOW we work, not WHAT we built. Produces actionable improvements for next sprint."},ar:{t:"الاستعراض (Retrospective)",d:"حدث سبرنت يتأمل فيه الفريق العمليات ويُحدد التحسينات.",k:"التركيز: كيف نعمل، ليس ماذا أنجزنا. ينتج تحسينات قابلة للتطبيق للسبرنت القادم."}},
+];
+
+const TAB_IDS=["dash","domains","flash","practice","mock","formulas","agile","notes","revision"];
+const TAB_ICONS=["📊","🗂️","🃏","❓","⏱️","🧮","🔄","📝","⚡"];
+const FCATS=["All","EVM Core","EVM Efficiency","EVM Variance","EVM Forecast","Estimation","Communication","Schedule"];
+
+function App(){
+  const [lang,setLang]=useState("en");
+  const [tab,setTab]=useState("dash");
+  const [conf,setConf]=useState({});
+  const [fcIdx,setFcIdx]=useState(0);
+  const [fcFlip,setFcFlip]=useState(false);
+  const [fcSc,setFcSc]=useState({});
+  const [qAns,setQAns]=useState({});
+  const [qSel,setQSel]=useState({});
+  const [notes,setNotes]=useState({});
+  const [noteIn,setNoteIn]=useState("");
+  const [noteTopic,setNoteTopic]=useState("integration");
+  const [fCat,setFCat]=useState("All");
+  const [revSec,setRevSec]=useState("definitions");
+  const [mockCnt,setMockCnt]=useState(8);
+  const [mockSt,setMockSt]=useState(null);
+  const [mockDone,setMockDone]=useState(false);
+  const [mockRes,setMockRes]=useState(null);
+  const [elapsed,setElapsed]=useState(0);
+  const [loaded,setLoaded]=useState(false);
+
+  const rtl=lang==="ar";
+  const t=UI[lang];
+  const L=o=>o[lang];
+  const streak=4;
+
+  useEffect(()=>{(async()=>{try{const r=await window.storage.get("pmp_bi");if(r?.value){const d=JSON.parse(r.value);if(d.conf)setConf(d.conf);if(d.fcSc)setFcSc(d.fcSc);if(d.notes)setNotes(d.notes);if(d.qAns)setQAns(d.qAns);if(d.lang)setLang(d.lang);}}catch{}setLoaded(true);})();},[]);
+  useEffect(()=>{if(loaded)window.storage.set("pmp_bi",JSON.stringify({conf,fcSc,notes,qAns,lang})).catch(()=>{});},[conf,fcSc,notes,qAns,lang,loaded]);
+  useEffect(()=>{if(mockSt&&!mockDone){const i=setInterval(()=>setElapsed(e=>e+1),1000);return()=>clearInterval(i);}},[mockSt,mockDone]);
+
+  const allTopics=DOM.flatMap(d=>d[lang].topics);
+  const highC=Object.values(conf).filter(v=>v===2).length;
+  const qCorrect=Object.values(qAns).filter(a=>a.correct).length;
+  const qTotal=Object.keys(qAns).length;
+  const fcKnow=Object.values(fcSc).filter(v=>v==="know").length;
+  const acc=qTotal>0?Math.round(qCorrect/qTotal*100):0;
+  const overallPct=Math.round((highC/allTopics.length)*100);
+  const fc=FC[fcIdx];
+  const fmtT=s=>`${Math.floor(s/60)}:${String(s%60).padStart(2,"0")}`;
+
+  const card={background:C.white,borderRadius:14,border:`1px solid ${C.border}`,padding:"18px 20px"};
+  const inp={background:C.white,border:`1px solid ${C.border}`,borderRadius:8,padding:"9px 12px",fontSize:13,color:C.navy,fontFamily:"inherit",width:"100%",boxSizing:"border-box"};
+  const Bdg=({bg,col,txt})=><span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:bg,color:col,fontWeight:600,whiteSpace:"nowrap"}}>{txt}</span>;
+  const bord=(w,col)=>({[rtl?"borderRight":"borderLeft"]:`${w} solid ${col}`});
+
+  const startMock=()=>{const qs=[...QS].sort(()=>Math.random()-.5).slice(0,Math.min(mockCnt,QS.length));setMockSt({questions:qs,selected:{},currentQ:0});setMockDone(false);setMockRes(null);setElapsed(0);};
+  const submitMock=()=>{if(!mockSt)return;const{questions,selected}=mockSt;let correct=0;const byDom={};questions.forEach((q,i)=>{const ok=selected[i]===q[lang].correct;if(ok)correct++;const dom=q[lang].dom;if(!byDom[dom])byDom[dom]={c:0,t:0};byDom[dom].t++;if(ok)byDom[dom].c++;});setMockRes({correct,total:questions.length,acc:Math.round(correct/questions.length*100),byDom,time:elapsed,questions,selected});setMockDone(true);};
+
+  return(
+    <div dir={rtl?"rtl":"ltr"} style={{background:C.cream,minHeight:"100vh",fontFamily:"'Segoe UI','Tahoma','Arial',sans-serif"}}>
+      <style>{css}</style>
+
+      {/* HEADER */}
+      <div style={{background:C.navy,padding:"0 1.25rem"}}>
+        <div style={{maxWidth:940,margin:"0 auto",display:"flex",alignItems:"center",justifyContent:"space-between",height:58,gap:8}}>
+          <div style={{display:"flex",alignItems:"center",gap:10}}>
+            <div style={{width:36,height:36,borderRadius:10,background:C.gold,display:"flex",alignItems:"center",justifyContent:"center",fontSize:17,fontWeight:900,color:C.navy,flexShrink:0}}>P</div>
+            <div>
+              <p style={{margin:0,fontWeight:700,fontSize:15,color:C.white}}>{t.appName}</p>
+              <p style={{margin:0,fontSize:10,color:C.muted,textTransform:"uppercase",letterSpacing:.5}}>{t.appSub}</p>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap",justifyContent:"flex-end"}}>
+            <span style={{fontSize:12,color:C.goldL}}>🔥 {streak} {t.streak}</span>
+            <span style={{fontSize:11,color:C.muted,background:"rgba(255,255,255,.07)",padding:"4px 10px",borderRadius:20}}>{acc}% {t.accLbl}</span>
+            <button onClick={()=>{setLang(l=>l==="en"?"ar":"en");setRevSec("definitions");}} style={{padding:"6px 14px",background:C.gold,color:C.navy,border:"none",borderRadius:20,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>{t.langBtn}</button>
+          </div>
+        </div>
+      </div>
+      <div style={{height:3,background:`linear-gradient(${rtl?"270deg":"90deg"},${C.gold},${C.goldL},${C.gold})`}}/>
+
+      {/* NAV */}
+      <div style={{background:C.navy2,padding:"0 1.25rem",overflowX:"auto"}}>
+        <div style={{maxWidth:940,margin:"0 auto",display:"flex",gap:2,height:44,alignItems:"center"}}>
+          {TAB_IDS.map((id,i)=>(
+            <button key={id} className={`np${tab===id?" on":""}`} onClick={()=>setTab(id)} style={{padding:"5px 12px",fontSize:12,fontWeight:500,border:"none",borderRadius:20,fontFamily:"inherit",color:tab===id?C.navy:C.muted,background:tab===id?C.gold:"transparent",cursor:"pointer"}}>{TAB_ICONS[i]} {t.tabs[i]}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{maxWidth:940,margin:"0 auto",padding:"1.5rem 1rem",animation:"fadeIn .25s"}}>
+
+        {/* ── DASHBOARD ── */}
+        {tab==="dash"&&<div>
+          <p style={{margin:"0 0 1rem",fontSize:20,fontWeight:700,color:C.navy}}>{t.dash.title}</p>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:"1.25rem"}}>
+            {[{l:t.dash.s1,v:`${Object.keys(conf).length}/${allTopics.length}`,c:C.navy},{l:t.dash.s2,v:highC,c:"#166534",bg:"#f0fdf4"},{l:t.dash.s3,v:qTotal,c:C.navy2},{l:t.dash.s4,v:`${acc}%`,c:acc>=70?"#166534":acc>=50?"#92600a":"#b91c1c",bg:acc>=70?"#f0fdf4":acc>=50?"#fffbeb":"#fff0f0"},{l:t.dash.s5,v:`${fcKnow}/${FC.length}`,c:C.goldD},{l:t.dash.s6,v:`${streak}d 🔥`,c:C.navy}].map((s,i)=>(
+              <div key={i} className="hov" style={{background:s.bg||C.white,borderRadius:12,padding:"14px 16px",border:`1px solid ${C.border}`,transition:"all .2s"}}>
+                <p style={{margin:"0 0 6px",fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>{s.l}</p>
+                <p style={{margin:0,fontSize:24,fontWeight:700,color:s.c}}>{s.v}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{...card,marginBottom:"1.25rem"}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+              <p style={{margin:0,fontSize:13,fontWeight:600,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>{t.dash.readiness}</p>
+              <p style={{margin:0,fontSize:20,fontWeight:700,color:C.gold}}>{overallPct}%</p>
+            </div>
+            <div style={{height:10,background:C.cream,borderRadius:5,overflow:"hidden",marginBottom:6}}>
+              <div style={{height:"100%",width:`${overallPct}%`,background:`linear-gradient(90deg,${C.navy2},${C.gold})`,borderRadius:5,transition:"width .8s"}}/>
+            </div>
+            <p style={{margin:0,fontSize:11,color:C.muted}}>{highC} {t.dash.mastered} · {allTopics.length-highC} {t.dash.toGo}</p>
+          </div>
+          <div style={{...card,marginBottom:"1.25rem"}}>
+            <p style={{margin:"0 0 14px",fontSize:13,fontWeight:600,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>{t.dash.weight}</p>
+            {DOM.map(d=>(
+              <div key={d.id} style={{marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
+                  <span style={{fontSize:13,fontWeight:500,color:C.navy}}>{d.icon} {d[lang].lbl}</span>
+                  <span style={{fontSize:13,fontWeight:700,color:d.col}}>{d.pct}{t.dash.ofExam}</span>
+                </div>
+                <div style={{height:8,background:C.cream,borderRadius:4,overflow:"hidden"}}>
+                  <div style={{height:"100%",width:`${d.pct}%`,background:d.col,borderRadius:4}}/>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{background:C.navy,borderRadius:14,padding:"18px 20px"}}>
+            <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:.5}}>{t.dash.mission}</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:8}}>
+              {t.dash.missions.map((m,i)=>(
+                <div key={i} style={{background:"rgba(255,255,255,.07)",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
+                  <div style={{width:16,height:16,borderRadius:4,border:`1.5px solid ${C.gold}`,flexShrink:0}}/>
+                  <span style={{fontSize:12,color:"rgba(255,255,255,.85)"}}>{m}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>}
+
+        {/* ── DOMAINS ── */}
+        {tab==="domains"&&<div>
+          <p style={{margin:"0 0 1rem",fontSize:20,fontWeight:700,color:C.navy}}>{t.dom.title}</p>
+          {DOM.map(d=>(
+            <div key={d.id} style={{...card,...bord("4px",d.col),marginBottom:"1rem"}}>
+              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                <span style={{fontSize:26}}>{d.icon}</span>
+                <div style={{flex:1}}>
+                  <p style={{margin:"0 0 2px",fontSize:15,fontWeight:700,color:C.navy}}>{d[lang].lbl}</p>
+                  <p style={{margin:0,fontSize:12,color:C.muted}}>{d.pct}{t.dash.ofExam}</p>
+                </div>
+                <div style={{width:46,height:46,borderRadius:"50%",background:d.col,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.navy,flexShrink:0}}>{d.pct}%</div>
+              </div>
+              <p style={{margin:"0 0 14px",fontSize:13,color:C.muted,lineHeight:1.6}}>{d[lang].desc}</p>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(185px,1fr))",gap:8}}>
+                {d[lang].topics.map(tp=>{
+                  const cv=conf[tp.id]??-1;
+                  return(
+                    <div key={tp.id} style={{background:C.cream,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`}}>
+                      <p style={{margin:"0 0 8px",fontSize:13,color:C.navy,fontWeight:500}}>{tp.lbl}</p>
+                      <div style={{display:"flex",gap:4}}>
+                        {[0,1,2].map(v=>(
+                          <button key={v} onClick={()=>setConf(p=>({...p,[tp.id]:v}))} style={{flex:1,padding:"4px 0",fontSize:10,fontWeight:600,borderRadius:6,border:`1px solid ${cv===v?["#e24b4a",C.gold,"#22c55e"][v]:C.border}`,background:cv===v?["#fff0f0","#fffbeb","#f0fdf4"][v]:C.white,color:cv===v?["#b91c1c","#92600a","#166534"][v]:C.muted,cursor:"pointer",fontFamily:"inherit",transition:"all .15s"}}>
+                            {[t.dom.low,t.dom.med,t.dom.high][v]}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>}
+
+        {/* ── FLASHCARDS ── */}
+        {tab==="flash"&&<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem",flexWrap:"wrap",gap:8}}>
+            <p style={{margin:0,fontSize:20,fontWeight:700,color:C.navy}}>{t.fl.title}</p>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+              <Bdg bg="#f0fdf4" col="#166534" txt={`${t.fl.know}: ${fcKnow}`}/>
+              <Bdg bg="#fffbeb" col="#92600a" txt={`${t.fl.rev}: ${Object.values(fcSc).filter(v=>v==="review").length}`}/>
+              <Bdg bg="#fff0f0" col="#b91c1c" txt={`${t.fl.weak}: ${Object.values(fcSc).filter(v=>v==="weak").length}`}/>
+            </div>
+          </div>
+          <div style={{height:4,background:C.cream,borderRadius:2,marginBottom:"1.25rem",overflow:"hidden"}}>
+            <div style={{height:"100%",width:`${((fcIdx+1)/FC.length)*100}%`,background:`linear-gradient(90deg,${C.navy2},${C.gold})`,borderRadius:2,transition:"width .4s"}}/>
+          </div>
+          <div style={{position:"relative",height:250,marginBottom:"1rem",cursor:"pointer",perspective:1000}} onClick={()=>setFcFlip(f=>!f)}>
+            <div className={`fi${fcFlip?" on":""}`} style={{position:"relative",width:"100%",height:"100%"}}>
+              <div className="ff" style={{background:C.navy,borderRadius:16,padding:"24px",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"center",boxSizing:"border-box"}}>
+                <div style={{position:"absolute",top:14,[rtl?"left":"right"]:14,display:"flex",gap:6}}>
+                  <Bdg bg="rgba(201,162,39,.2)" col={C.goldL} txt={L(fc).dom}/>
+                  <Bdg bg="rgba(255,255,255,.1)" col="rgba(255,255,255,.5)" txt={t.fl.tap}/>
+                </div>
+                <p style={{fontSize:11,color:C.muted,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:.5}}>{t.fl.card} {fcIdx+1} {t.fl.of} {FC.length}</p>
+                <p style={{fontSize:17,fontWeight:600,color:C.white,textAlign:"center",lineHeight:1.6,margin:0}}>{L(fc).q}</p>
+              </div>
+              <div className="fb" style={{background:C.goldL,borderRadius:16,padding:"20px 24px",display:"flex",flexDirection:"column",justifyContent:"center",boxSizing:"border-box"}}>
+                <p style={{fontSize:12,fontWeight:700,color:C.navy,margin:"0 0 6px",textTransform:"uppercase",letterSpacing:.5}}>{t.fl.ans}</p>
+                <p style={{fontSize:15,fontWeight:600,color:C.navy,lineHeight:1.5,margin:"0 0 12px"}}>{L(fc).a}</p>
+                <div style={{borderTop:`1px solid rgba(22,32,56,.1)`,paddingTop:10}}>
+                  <p style={{fontSize:12,color:C.navy2,lineHeight:1.6,margin:0,fontStyle:"italic"}}>{L(fc).exp}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap",marginBottom:"1.25rem"}}>
+            {[{l:t.fl.prev,a:()=>{setFcIdx(i=>(i-1+FC.length)%FC.length);setFcFlip(false);}},{l:t.fl.knowBtn,a:()=>{setFcSc(s=>({...s,[fc.id]:"know"}));setFcIdx(i=>(i+1)%FC.length);setFcFlip(false);}},{l:t.fl.revBtn,a:()=>{setFcSc(s=>({...s,[fc.id]:"review"}));setFcIdx(i=>(i+1)%FC.length);setFcFlip(false);}},{l:t.fl.weakBtn,a:()=>{setFcSc(s=>({...s,[fc.id]:"weak"}));setFcIdx(i=>(i+1)%FC.length);setFcFlip(false);}},{l:t.fl.next,a:()=>{setFcIdx(i=>(i+1)%FC.length);setFcFlip(false);}}].map((b,i)=>(
+              <button key={i} onClick={b.a} style={{padding:"9px 14px",fontSize:12,fontWeight:600,border:`1px solid ${C.border}`,borderRadius:8,background:i===1?"#f0fdf4":i===2?"#fffbeb":i===3?"#fff0f0":C.cream,color:i===1?"#166534":i===2?"#92600a":i===3?"#b91c1c":C.navy,cursor:"pointer",fontFamily:"inherit"}}>{b.l}</button>
+            ))}
+          </div>
+          <div style={{...card}}>
+            <p style={{margin:"0 0 10px",fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>{t.fl.nav}</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {FC.map((f,i)=>{const sc=fcSc[f.id];return(
+                <button key={f.id} onClick={()=>{setFcIdx(i);setFcFlip(false);}} style={{width:34,height:34,borderRadius:7,border:`2px solid ${fcIdx===i?C.gold:C.border}`,cursor:"pointer",background:sc==="know"?"#f0fdf4":sc==="review"?"#fffbeb":sc==="weak"?"#fff0f0":C.cream,fontSize:11,fontWeight:600,color:sc==="know"?"#166534":sc==="review"?"#92600a":sc==="weak"?"#b91c1c":C.navy}}>{i+1}</button>
+              );})}
+            </div>
+          </div>
+        </div>}
+
+        {/* ── PRACTICE ── */}
+        {tab==="practice"&&<div>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"1rem",flexWrap:"wrap",gap:8}}>
+            <p style={{margin:0,fontSize:20,fontWeight:700,color:C.navy}}>{t.pr.title}</p>
+            <div style={{display:"flex",gap:6}}><Bdg bg={acc>=70?"#f0fdf4":"#fff0f0"} col={acc>=70?"#166534":"#b91c1c"} txt={`${acc}% ${t.pr.accuracy}`}/><Bdg bg={C.cream} col={C.navy} txt={`${qCorrect}/${qTotal}`}/></div>
+          </div>
+          {QS.map((q,qi)=>{
+            const ql=q[lang];const sel=qSel[q.id];const ans=qAns[q.id];
+            return(
+              <div key={q.id} style={{...card,...bord("4px",ans?ans.correct?"#22c55e":"#e24b4a":C.border),marginBottom:"1rem"}}>
+                <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,padding:"3px 10px",borderRadius:20,background:"rgba(22,32,56,.08)",color:C.navy,fontWeight:600}}>Q{qi+1}</span>
+                  <Bdg bg="rgba(201,162,39,.15)" col={C.goldD} txt={ql.dom}/>
+                </div>
+                <p style={{margin:"0 0 14px",fontSize:14,fontWeight:500,color:C.navy,lineHeight:1.65}}>{ql.q}</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:ans?12:0}}>
+                  {ql.opts.map((opt,oi)=>{
+                    let bg=C.cream,col=C.navy,brd=C.border;
+                    if(ans){if(oi===ql.correct){bg="#f0fdf4";col="#166534";brd="#22c55e";}else if(oi===sel&&oi!==ql.correct){bg="#fff0f0";col="#b91c1c";brd="#e24b4a";}}
+                    else if(sel===oi){bg=C.goldL;col=C.navy;brd=C.gold;}
+                    return(
+                      <div key={oi} className="ao" onClick={()=>{if(!ans)setQSel(s=>({...s,[q.id]:oi}));}} style={{padding:"10px 14px",borderRadius:8,border:`1.5px solid ${brd}`,background:bg,color:col,fontSize:13,cursor:ans?"default":"pointer",fontWeight:500,transition:"all .15s",lineHeight:1.5}}>
+                        <span style={{fontWeight:700,marginInlineEnd:8}}>{String.fromCharCode(65+oi)}.</span>{opt}
+                        {ans&&oi===ql.correct&&<span style={{marginInlineStart:6,fontWeight:700}}>✓</span>}
+                        {ans&&oi===sel&&oi!==ql.correct&&<span style={{marginInlineStart:6}}>✗</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                {!ans&&sel!==undefined&&<button onClick={()=>setQAns(a=>({...a,[q.id]:{selected:sel,correct:sel===ql.correct}}))} style={{padding:"9px 22px",background:C.gold,color:C.navy,border:"none",borderRadius:8,fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{t.pr.submit}</button>}
+                {ans&&(
+                  <div style={{background:ans.correct?"#f0fdf4":"#fff0f0",borderRadius:10,padding:"14px",border:`1px solid ${ans.correct?"#bbf7d0":"#fecaca"}`}}>
+                    <p style={{margin:"0 0 6px",fontWeight:700,color:ans.correct?"#166534":"#b91c1c",fontSize:13}}>{ans.correct?t.pr.correct:t.pr.incorrect}</p>
+                    <p style={{margin:"0 0 8px",fontSize:13,color:C.navy,lineHeight:1.6}}>{ql.exp}</p>
+                    {ql.tip&&<p style={{margin:0,fontSize:12,fontWeight:600,color:C.goldD,fontStyle:"italic"}}>💡 {ql.tip}</p>}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>}
+
+        {/* ── MOCK EXAM ── */}
+        {tab==="mock"&&<div>
+          <p style={{margin:"0 0 1rem",fontSize:20,fontWeight:700,color:C.navy}}>{t.mk.title}</p>
+          {!mockSt&&!mockRes&&(
+            <div style={{...card,textAlign:"center",padding:"2.5rem 2rem"}}>
+              <p style={{fontSize:36,margin:"0 0 8px"}}>⏱️</p>
+              <p style={{fontSize:18,fontWeight:700,color:C.navy,margin:"0 0 6px"}}>{t.mk.sub}</p>
+              <p style={{fontSize:13,color:C.muted,margin:"0 0 24px"}}>{t.mk.desc}</p>
+              <div style={{display:"flex",gap:8,justifyContent:"center",flexWrap:"wrap",marginBottom:20}}>
+                {[8,QS.length].map(n=>(
+                  <button key={n} onClick={()=>setMockCnt(n)} style={{padding:"10px 24px",borderRadius:8,border:`2px solid ${mockCnt===n?C.gold:C.border}`,background:mockCnt===n?C.goldL:C.cream,color:mockCnt===n?C.goldD:C.navy,fontSize:14,fontWeight:600,cursor:"pointer",fontFamily:"inherit",transition:"all .18s"}}>{n} {t.mk.qs}</button>
+                ))}
+              </div>
+              <p style={{fontSize:12,color:C.muted,margin:"0 0 16px"}}>{t.mk.demo} {QS.length} {t.mk.max}</p>
+              <button onClick={startMock} style={{padding:"12px 36px",background:C.gold,color:C.navy,border:"none",borderRadius:10,fontSize:15,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>{t.mk.start}</button>
+            </div>
+          )}
+          {mockSt&&!mockDone&&(()=>{const q=mockSt.questions[mockSt.currentQ];const ql=q[lang];const sel=mockSt.selected[mockSt.currentQ];return(
+            <div>
+              <div style={{...card,marginBottom:"1rem",display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:8}}>
+                <span style={{fontSize:13,fontWeight:600,color:C.navy}}>Q {mockSt.currentQ+1}/{mockSt.questions.length}</span>
+                <span style={{fontSize:18,fontWeight:700,color:C.gold}}>⏱ {fmtT(elapsed)}</span>
+                <div style={{display:"flex",gap:4}}>{mockSt.questions.map((_,i)=><div key={i} style={{width:8,height:8,borderRadius:"50%",background:i<mockSt.currentQ?"#22c55e":i===mockSt.currentQ?C.gold:C.border}}/>)}</div>
+              </div>
+              <div style={{...card,marginBottom:"1rem"}}>
+                <Bdg bg="rgba(201,162,39,.15)" col={C.goldD} txt={ql.dom}/>
+                <p style={{margin:"12px 0 16px",fontSize:14,fontWeight:500,color:C.navy,lineHeight:1.7}}>{ql.q}</p>
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {ql.opts.map((opt,oi)=>(
+                    <div key={oi} onClick={()=>setMockSt(s=>({...s,selected:{...s.selected,[s.currentQ]:oi}}))} style={{padding:"10px 14px",borderRadius:8,border:`1.5px solid ${sel===oi?C.gold:C.border}`,background:sel===oi?C.goldL:C.cream,fontSize:13,cursor:"pointer",fontWeight:500,lineHeight:1.5}}>
+                      <span style={{fontWeight:700,marginInlineEnd:8}}>{String.fromCharCode(65+oi)}.</span>{opt}
+                    </div>
+                  ))}
+                </div>
+                <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"space-between"}}>
+                  <button onClick={()=>mockSt.currentQ>0&&setMockSt(s=>({...s,currentQ:s.currentQ-1}))} style={{padding:"8px 16px",background:C.cream,border:`1px solid ${C.border}`,borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:C.navy,opacity:mockSt.currentQ===0?.4:1}}>{t.mk.back}</button>
+                  {mockSt.currentQ<mockSt.questions.length-1
+                    ?<button onClick={()=>setMockSt(s=>({...s,currentQ:s.currentQ+1}))} style={{padding:"8px 22px",background:C.gold,border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,color:C.navy}}>{t.mk.next}</button>
+                    :<button onClick={submitMock} style={{padding:"8px 22px",background:C.navy,border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700,color:C.white}}>{t.mk.submitE}</button>}
+                </div>
+              </div>
+            </div>
+          );})()}
+          {mockRes&&(
+            <div>
+              <div style={{background:C.navy,borderRadius:16,padding:"28px",marginBottom:"1.25rem",textAlign:"center"}}>
+                <p style={{fontSize:40,margin:"0 0 6px"}}>🎯</p>
+                <p style={{fontSize:32,fontWeight:700,color:mockRes.acc>=70?C.goldL:"#fca5a5",margin:"0 0 4px"}}>{mockRes.acc}%</p>
+                <p style={{fontSize:13,color:C.muted,margin:"0 0 10px"}}>{mockRes.correct}/{mockRes.total} {t.mk.resC} · {t.mk.resT}: {fmtT(mockRes.time)}</p>
+                <p style={{fontSize:14,color:mockRes.acc>=70?"#86efac":"#fca5a5",fontWeight:600}}>{mockRes.acc>=70?t.mk.pass:t.mk.fail}</p>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:10,marginBottom:"1.25rem"}}>
+                {Object.entries(mockRes.byDom).map(([dom,s])=>{const pct=Math.round(s.c/s.t*100);return(
+                  <div key={dom} style={{...card}}>
+                    <p style={{margin:"0 0 4px",fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase"}}>{dom}</p>
+                    <p style={{margin:"0 0 8px",fontSize:22,fontWeight:700,color:pct>=70?"#166534":"#b91c1c"}}>{pct}%</p>
+                    <div style={{height:4,background:C.cream,borderRadius:2}}><div style={{height:"100%",width:`${pct}%`,background:pct>=70?"#22c55e":"#e24b4a",borderRadius:2}}/></div>
+                    <p style={{margin:"5px 0 0",fontSize:11,color:C.muted}}>{s.c}/{s.t}</p>
+                  </div>
+                );})}
+              </div>
+              <button onClick={()=>{setMockSt(null);setMockRes(null);setMockDone(false);setElapsed(0);}} style={{padding:"10px 22px",background:C.navy,color:C.white,border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:600}}>{t.mk.retry}</button>
+            </div>
+          )}
+        </div>}
+
+        {/* ── FORMULAS ── */}
+        {tab==="formulas"&&<div>
+          <p style={{margin:"0 0 1rem",fontSize:20,fontWeight:700,color:C.navy}}>{t.fo.title}</p>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:"1.25rem"}}>
+            {FCATS.map((f,i)=>(
+              <button key={f} onClick={()=>setFCat(f)} style={{padding:"4px 12px",fontSize:11,fontWeight:500,borderRadius:20,border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"inherit",background:fCat===f?C.navy:C.white,color:fCat===f?C.white:C.muted,transition:"all .18s"}}>{i===0?t.fo.all:f}</button>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(290px,1fr))",gap:"1rem"}}>
+            {FO.filter(f=>fCat==="All"||f.cat===fCat).map(f=>(
+              <div key={f.id} className="hov" style={{...card,borderTop:`3px solid ${C.gold}`,transition:"all .2s"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,gap:8}}>
+                  <p style={{margin:0,fontSize:14,fontWeight:700,color:C.navy}}>{f[lang].nm}</p>
+                  <Bdg bg="rgba(201,162,39,.15)" col={C.goldD} txt={f.cat}/>
+                </div>
+                <div style={{background:C.navy,borderRadius:8,padding:"10px 14px",marginBottom:10}}>
+                  <p style={{margin:0,fontSize:15,fontWeight:700,color:C.gold,fontFamily:"monospace",textAlign:"center"}}>{f.f}</p>
+                </div>
+                <p style={{margin:"0 0 10px",fontSize:13,color:C.muted,lineHeight:1.6}}>{f[lang].desc}</p>
+                <div style={{background:C.cream,borderRadius:8,padding:"8px 12px",...bord("3px",C.gold)}}>
+                  <p style={{margin:0,fontSize:12,color:C.navy,lineHeight:1.6}}><strong>{t.fo.ex}</strong> {f[lang].ex}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>}
+
+        {/* ── AGILE ── */}
+        {tab==="agile"&&<div>
+          <p style={{margin:"0 0 4px",fontSize:20,fontWeight:700,color:C.navy}}>{t.ag.title}</p>
+          <p style={{margin:"0 0 1.25rem",fontSize:13,color:C.muted}}>{t.ag.sub}</p>
+          <div style={{background:C.navy,borderRadius:14,padding:"18px 20px",marginBottom:"1.25rem"}}>
+            <p style={{margin:"0 0 12px",fontSize:13,fontWeight:700,color:C.gold,textTransform:"uppercase",letterSpacing:.5}}>{t.ag.man}</p>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))",gap:8}}>
+              {t.ag.mv.map((v,i)=><div key={i} style={{background:"rgba(255,255,255,.07)",borderRadius:8,padding:"10px 12px"}}><span style={{fontSize:13,color:C.goldL,fontWeight:500,lineHeight:1.5}}>{v}</span></div>)}
+            </div>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(270px,1fr))",gap:"1rem",marginBottom:"1.25rem"}}>
+            {AG.map((a,i)=>(
+              <div key={i} className="hov" style={{...card,...bord("3px",C.gold),transition:"all .2s"}}>
+                <p style={{margin:"0 0 6px",fontSize:14,fontWeight:700,color:C.navy}}>{L(a).t}</p>
+                <p style={{margin:"0 0 8px",fontSize:13,color:C.muted,lineHeight:1.6}}>{L(a).d}</p>
+                <div style={{background:C.cream,borderRadius:6,padding:"8px 10px",...bord("2px",C.gold)}}>
+                  <p style={{margin:0,fontSize:12,color:C.navy2,lineHeight:1.5}}>🔑 {L(a).k}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{...card,borderTop:`3px solid ${C.gold}`}}>
+            <p style={{margin:"0 0 12px",fontSize:14,fontWeight:700,color:C.navy}}>{t.ag.cyc}</p>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+              {t.ag.cs.map((s,i)=>(
+                <div key={i} style={{flexShrink:0,background:i%2===0?C.navy:C.navy2,borderRadius:10,padding:"12px 14px",textAlign:"center",minWidth:100}}>
+                  <p style={{margin:0,fontSize:12,color:C.goldL,fontWeight:500,lineHeight:1.4}}>{s}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>}
+
+        {/* ── NOTES ── */}
+        {tab==="notes"&&<div>
+          <p style={{margin:"0 0 1rem",fontSize:20,fontWeight:700,color:C.navy}}>{t.no.title}</p>
+          <div style={{...card,marginBottom:"1rem"}}>
+            <p style={{margin:"0 0 12px",fontSize:13,fontWeight:600,color:C.navy,textTransform:"uppercase",letterSpacing:.5}}>{t.no.add}</p>
+            <div style={{marginBottom:10}}>
+              <label style={{fontSize:11,color:C.muted,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,display:"block",marginBottom:5}}>{t.no.topic}</label>
+              <select value={noteTopic} onChange={e=>setNoteTopic(e.target.value)} style={inp}>
+                {DOM.flatMap(d=>d[lang].topics.map(tp=><option key={tp.id} value={tp.id}>{d[lang].lbl} — {tp.lbl}</option>))}
+              </select>
+            </div>
+            <textarea value={noteIn} onChange={e=>setNoteIn(e.target.value)} placeholder={t.no.ph} style={{...inp,height:80,resize:"vertical",marginBottom:10}}/>
+            <button onClick={()=>{if(!noteIn.trim())return;setNotes(n=>({...n,[noteTopic]:[...(n[noteTopic]||[]),{id:Date.now(),text:noteIn.trim(),date:new Date().toLocaleDateString()}]}));setNoteIn("");}} style={{padding:"9px 22px",background:C.navy,color:C.white,border:"none",borderRadius:8,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>{t.no.save}</button>
+          </div>
+          {Object.keys(notes).length===0
+            ?<div style={{...card,textAlign:"center",padding:"2.5rem",color:C.muted,fontSize:13}}>{t.no.empty}</div>
+            :Object.entries(notes).map(([tid,tNotes])=>{
+              const dom=DOM.find(d=>d[lang].topics.find(tp=>tp.id===tid));
+              const tp=dom?.[lang]?.topics.find(tp=>tp.id===tid);
+              return tNotes.length===0?null:(
+                <div key={tid} style={{...card,marginBottom:"1rem"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+                    <span>{dom?.icon}</span>
+                    <p style={{margin:0,fontSize:13,fontWeight:700,color:C.navy}}>{dom?.[lang]?.lbl} — {tp?.lbl}</p>
+                    <Bdg bg={C.cream} col={C.muted} txt={tNotes.length}/>
+                  </div>
+                  {tNotes.map(n=>(
+                    <div key={n.id} style={{background:C.cream,borderRadius:8,padding:"10px 12px",marginBottom:6,...bord("3px",C.gold),display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8}}>
+                      <div>
+                        <p style={{margin:"0 0 4px",fontSize:13,color:C.navy,lineHeight:1.5}}>{n.text}</p>
+                        <p style={{margin:0,fontSize:11,color:C.muted}}>{n.date}</p>
+                      </div>
+                      <button onClick={()=>setNotes(p=>({...p,[tid]:p[tid].filter(x=>x.id!==n.id)}))} style={{background:"none",border:"none",cursor:"pointer",fontSize:16,color:C.muted,padding:0,lineHeight:1,flexShrink:0}}>×</button>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+        </div>}
+
+        {/* ── QUICK REVISION ── */}
+        {tab==="revision"&&<div>
+          <p style={{margin:"0 0 4px",fontSize:20,fontWeight:700,color:C.navy}}>{t.rv.title}</p>
+          <p style={{margin:"0 0 1.25rem",fontSize:13,color:C.muted}}>{t.rv.sub}</p>
+          <div style={{display:"flex",gap:6,marginBottom:"1.25rem",flexWrap:"wrap"}}>
+            {t.rv.secs.map(([k,lbl])=>(
+              <button key={k} onClick={()=>setRevSec(k)} style={{padding:"7px 16px",fontSize:12,fontWeight:600,borderRadius:20,border:`1px solid ${C.border}`,cursor:"pointer",fontFamily:"inherit",background:revSec===k?C.navy:C.white,color:revSec===k?C.white:C.navy,transition:"all .15s"}}>{lbl}</button>
+            ))}
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(250px,1fr))",gap:8}}>
+            {(t.rv[revSec]||[]).map((item,i)=>(
+              <div key={i} style={{background:C.white,borderRadius:10,padding:"12px 16px",border:`1px solid ${C.border}`,...bord("3px",revSec==="traps"?"#e24b4a":revSec==="formulas"?C.gold:revSec==="mindset"?"#378add":C.navy),animation:`fadeIn .2s ${i*.03}s both`}}>
+                <p style={{margin:0,fontSize:13,color:C.navy,lineHeight:1.6,fontWeight:revSec==="formulas"?600:400,fontFamily:revSec==="formulas"?"monospace":"inherit"}}>{item}</p>
+              </div>
+            ))}
+          </div>
+        </div>}
+
+        <div style={{marginTop:"2rem",textAlign:"center",borderTop:`1px solid ${C.border}`,paddingTop:"1rem"}}>
+          <p style={{margin:"0 0 4px",fontSize:11,color:C.muted}}>{t.footer}</p>
+          <div style={{width:40,height:2,background:C.gold,borderRadius:1,margin:"6px auto 0"}}/>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
